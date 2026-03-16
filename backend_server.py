@@ -5,13 +5,15 @@ Then the Next.js app (with BACKEND_URL=http://127.0.0.1:5000) will send requests
 """
 
 import os
+from pathlib import Path
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from botocore.exceptions import NoCredentialsError
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 from iac_tool import scan_terraform_content
 from nova_client import NovaClient, ThrottlingException
@@ -52,6 +54,14 @@ def analyze():
         try:
             client = NovaClient(api_key=os.environ.get("AWS_BEARER_TOKEN_BEDROCK"))
             report = client.invoke(prompt)
+        except NoCredentialsError:
+            return jsonify({
+                "error": (
+                    "AWS credentials missing for Bedrock call. If using Bedrock API key, verify "
+                    "AWS_BEARER_TOKEN_BEDROCK in Finops/.env and restart backend. "
+                    "Otherwise configure IAM credentials via AWS profile/access keys."
+                )
+            }), 500
         except ThrottlingException as e:
             return jsonify({"error": f"Rate limited. Retry in a moment. ({e})"}), 503
         except Exception as e:

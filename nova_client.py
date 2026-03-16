@@ -4,14 +4,15 @@ Uses the Converse API with extended thinking enabled.
 """
 
 import os
+from pathlib import Path
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 
 # Load .env if python-dotenv is available (for API key from file)
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 except ImportError:
     pass
 
@@ -71,6 +72,12 @@ class NovaClient:
         try:
             response = self._client.converse(**request_kwargs)
             return self._parse_response(response)
+        except NoCredentialsError as e:
+            raise NoCredentialsError(
+                "Unable to locate AWS credentials. If you are using a Bedrock API key, ensure "
+                "AWS_BEARER_TOKEN_BEDROCK is set and your boto3/botocore version supports Bedrock API key auth. "
+                "Alternatively configure IAM credentials (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY or AWS profile)."
+            ) from e
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             if error_code == "ThrottlingException":

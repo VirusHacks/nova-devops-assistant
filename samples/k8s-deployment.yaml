@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risky-app
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: risky-app
+  template:
+    metadata:
+      labels:
+        app: risky-app
+    spec:
+      containers:
+      - name: main
+        image: nginx:latest # 🔴 Risk: Latest tag
+        ports:
+        - containerPort: 80
+        
+        # 🔴 Risk: Missing Resource Limits (CPU/Memory)
+        # This can lead to "noisy neighbor" issues and cluster instability
+        
+        securityContext:
+          privileged: true # 🔴 CRITICAL Security Risk: Privileged container
+          runAsUser: 0     # 🔴 Risk: Running as root
+          
+        env:
+        - name: DATABASE_URL
+          value: "postgres://admin:password123@db.prod.internal:5432/finance" # 🔴 Risk: Hardcoded secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risky-app-svc
+spec:
+  type: LoadBalancer # 🟠 Cost Risk: External LoadBalancers are expensive
+  selector:
+    app: risky-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80

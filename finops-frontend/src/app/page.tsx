@@ -1,4 +1,4 @@
- "use client";
+"use client";
 
 import { useState, FormEvent } from "react";
 
@@ -7,16 +7,19 @@ interface AnalysisResult {
   invocation_id?: string;
   result: string;
   createdAt: string;
+  type: string;
 }
 
-// Use Next.js API route (proxy) to avoid CORS; proxy forwards to API Gateway
-const API_BASE_URL = "";
+interface AnalysisRequestPayload {
+  request?: string;
+  terraform_file_name?: string;
+  terraform_content: string;
+}
 
 export default function HomePage() {
-  const [terraform, setTerraform] = useState("");
-  const [request, setRequest] = useState(
-    "Analyze this Terraform for Financial Tech Debt and cost risks."
-  );
+  const [content, setContent] = useState("");
+  const [fileType, setFileType] = useState("terraform");
+  const [focus, setFocus] = useState("General Security & Cost Optimization");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AnalysisResult[]>([]);
@@ -25,123 +28,171 @@ export default function HomePage() {
     e.preventDefault();
     setError(null);
 
-    if (!terraform.trim()) {
-      setError("Please paste your Terraform content.");
+    if (!content.trim()) {
+      setError("Please provide infrastructure code to audit.");
       return;
     }
+
+    const payload: AnalysisRequestPayload = {
+      request: `Audit this ${fileType} for: ${focus}`,
+      terraform_file_name: fileType === "terraform" ? "main.tf" : (fileType === "docker" ? "Dockerfile" : "k8s.yaml"),
+      terraform_content: content,
+    };
+
     setLoading(true);
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          request,
-          terraform_content: terraform,
-          terraform_file_name: "infra.tf",
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Backend error: ${res.status} ${text}`);
+        throw new Error(`Cloud Analysis Error: ${res.status}`);
       }
 
       const data = await res.json();
       const item: AnalysisResult = {
         session_id: data.session_id,
         invocation_id: data.invocation_id,
-        result: data.result ?? data.report ?? JSON.stringify(data, null, 2),
+        result: data.result ?? data.report ?? "Scan completed with no issues found.",
         createdAt: new Date().toISOString(),
+        type: fileType,
       };
       setResults((prev) => [item, ...prev]);
     } catch (err: any) {
-      setError(err.message ?? "Unexpected error");
+      setError(err.message ?? "Unexpected connectivity error");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
-      <header className="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">
-          FinOps FAME Dashboard
+    <div className="p-8 max-w-6xl mx-auto space-y-12 animate-in slide-in-from-bottom-4 duration-700">
+      <header className="space-y-2">
+        <h1 className="text-4xl font-black tracking-tight tracking-tighter uppercase leading-none">
+          Manual <span className="gradient-text">Cloud Audit</span>
         </h1>
-        <span className="text-xs text-slate-400">
-          Planner → Actor → Evaluator • AWS Step Functions
-        </span>
+        <p className="text-slate-500 font-medium">Instantly analyze IaC clusters using the Nova Guardian engine.</p>
       </header>
 
-      <main className="flex-1 grid gap-6 px-6 py-6 md:grid-cols-2">
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Run new analysis</h2>
-          <form onSubmit={handleAnalyze} className="space-y-4">
-            <div>
-              <label className="block text-sm mb-1 font-medium">
-                Request / question
-              </label>
-              <input
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/60"
-                value={request}
-                onChange={(e) => setRequest(e.target.value)}
-              />
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+        {/* Input Form */}
+        <section className="lg:col-span-7 space-y-8">
+          <form onSubmit={handleAnalyze} className="space-y-6">
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Asset Type</label>
+                  <select 
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTIgMSIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[length:12px_8px] bg-[right_1rem_center] bg-no-repeat"
+                    value={fileType}
+                    onChange={(e) => setFileType(e.target.value)}
+                  >
+                    <option value="terraform">Terraform (HCL)</option>
+                    <option value="k8s">Kubernetes (YAML)</option>
+                    <option value="docker">Dockerfile</option>
+                  </select>
+               </div>
+               <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scan Profile</label>
+                  <select 
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTIgMSIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[length:12px_8px] bg-[right_1rem_center] bg-no-repeat"
+                    value={focus}
+                    onChange={(e) => setFocus(e.target.value)}
+                  >
+                    <option value="General Security">Security First</option>
+                    <option value="Cost Optimization">FinOps / Cost</option>
+                    <option value="Compliance (CIS)">Compliance (CIS)</option>
+                  </select>
+               </div>
+             </div>
 
-            <div>
-              <label className="block text-sm mb-1 font-medium">
-                Terraform content
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Source Code
               </label>
-              <textarea
-                className="w-full h-64 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-emerald-500/60"
-                value={terraform}
-                onChange={(e) => setTerraform(e.target.value)}
-                placeholder='resource "aws_instance" "example" { ... }'
-              />
+              <div className="relative group">
+                <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-transparent opacity-0 group-focus-within:opacity-100 transition-opacity blur"></div>
+                <textarea
+                  className="relative w-full h-80 rounded-2xl border border-slate-800 bg-slate-950 px-5 py-4 text-sm font-mono outline-none focus:border-emerald-500/50 transition-all resize-none"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder={`project { \n  name = "production-cluster"\n  region = "us-east-1"\n}`}
+                />
+              </div>
             </div>
 
             {error && (
-              <p className="text-sm text-red-400">
-                {error}
-              </p>
+              <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-3">
+                <span className="text-red-500 text-lg">⚠️</span>
+                <p className="text-xs text-red-400 font-bold uppercase tracking-tight">{error}</p>
+              </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full relative group overflow-hidden rounded-2xl bg-emerald-500 py-4 text-sm font-black text-slate-950 transition-all hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50"
             >
-              {loading ? "Analyzing..." : "Run FinOps analysis"}
+              <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out skew-x-[-20deg]"></div>
+              <span className="relative flex items-center justify-center gap-2">
+                {loading ? (
+                    <>
+                        <div className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin"></div>
+                        DISPATCHING NOVA AGENT...
+                    </>
+                ) : (
+                    <>
+                        🛡️ INITIATE SECURITY AUDIT
+                    </>
+                )}
+              </span>
             </button>
           </form>
         </section>
 
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Recent results</h2>
-          {results.length === 0 && (
-            <p className="text-sm text-slate-400">
-              No analyses yet. Run your first scan on the left.
-            </p>
-          )}
-          <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
-            {results.map((item, idx) => (
-              <article
-                key={idx}
-                className="rounded-lg border border-slate-800 bg-slate-900/50 p-3"
-              >
-                <div className="mb-2 flex items-center justify-between text-xs text-slate-400">
-                  <span>Session: {item.session_id ?? "n/a"}</span>
-                  <span>
-                    {new Date(item.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <pre className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {item.result}
-                </pre>
-              </article>
-            ))}
+        {/* Results Stream */}
+        <section className="lg:col-span-5 space-y-6">
+          <div className="flex items-center justify-between px-2">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Audit Results</h3>
+              {results.length > 0 && (
+                  <button onClick={() => setResults([])} className="text-[10px] font-bold text-slate-600 hover:text-red-500 uppercase transition-colors">Clear All</button>
+              )}
+          </div>
+
+          <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
+            {results.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-800 py-20 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center text-2xl grayscale opacity-50">📂</div>
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest max-w-[180px]">Results will appear here in real-time</p>
+              </div>
+            ) : (
+              results.map((item, idx) => (
+                <article
+                  key={idx}
+                  className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6 space-y-4 animate-in slide-in-from-right-4 duration-500"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-slate-300 uppercase tracking-wider">{item.type}</span>
+                        <span className="text-[10px] font-medium text-slate-600">ID: {item.session_id?.slice(0, 8)}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500">{new Date(item.createdAt).toLocaleTimeString()}</span>
+                  </div>
+                  <div className="text-sm leading-relaxed text-slate-300 prose prose-invert max-w-none">
+                    <div dangerouslySetInnerHTML={{ 
+                        __html: item.result
+                            .replace(/\n/g, '<br/>')
+                            .replace(/\*\*(.*?)\*\*/g, '<strong class="text-emerald-400">$1</strong>')
+                            .replace(/` (.*?)`/g, '<code class="bg-slate-800 px-1 rounded">$1</code>')
+                    }} />
+                  </div>
+                </article>
+              ))
+            )}
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 }
