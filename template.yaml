@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: FAME Agent - FaaS-based Agentic MCP Engine for FinOps
+
+Parameters:
+  BedrockApiKeyParameter:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /finops/bedrock-api-key
+    Description: SSM Parameter containing Bedrock API key (create via: aws ssm put-parameter --name /finops/bedrock-api-key --value "ABSK..." --type SecureString)
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 60
+    MemorySize: 256
+
+Resources:
+  # --- DynamoDB Table ---
+  FameAgentMemoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: FameAgentMemory
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+        - AttributeName: invocation_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH
+        - AttributeName: invocation_id
+          KeyType: RANGE
+      Tags:
+        - Key: Application
+          Value: FameAgent
+
+  # --- S3 Bucket for Actor Cache ---
+  FameCacheBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "fame-agent-cache-${AWS::AccountId}-${AWS::Region}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireCache
+            Status: Enabled
+            ExpirationInDays: 7
+            Prefix: cache/
+      Tags:
+        - Key: Application
+          Value: FameAgent
+
+  # --- Lambda: Planner ---
+  PlannerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: FamePlanner
+      CodeUri: src/
+      Handler: handlers.planner.lambda_handler
+      Environment:
+        Variables:
+          FAME_MEMORY_TABLE: !Ref FameAgentMemoryTable
+          AWS_BEARER_TOKEN_BEDROCK: !Ref BedrockApiKeyParameter
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FameAgentMemoryTable
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParameters
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/finops/*"
+
+  # --- Lambda: Actor ---
+  ActorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: FameActor
+      CodeUri: src/
+      Handler: handlers.actor.lambda_handler
+      Environment:
+        Variables:
+          FAME_CACHE_BUCKET: !Ref FameCacheBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref FameCacheBucket
+
+  # --- Lambda: Evaluator ---
+  EvaluatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: FameEvaluator
+      CodeUri: src/
+      Handler: handlers.evaluator.lambda_handler
+      Environment:
+        Variables:
+          FAME_MEMORY_TABLE: !Ref FameAgentMemoryTable
+          AWS_BEARER_TOKEN_BEDROCK: !Ref BedrockApiKeyParameter
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FameAgentMemoryTable
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParameters
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/finops/*"
+
+  # --- Step Functions State Machine ---
+  FameStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: FameAgentStateMachine
+      DefinitionUri: statemachine.asl.json
+      Role: !GetAtt FameStateMachineRole.Arn
+      DefinitionSubstitutions:
+        PlannerArn: !GetAtt PlannerFunction.Arn
+        ActorArn: !GetAtt ActorFunction.Arn
+        EvaluatorArn: !GetAtt EvaluatorFunction.Arn
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt FameStateMachineLogGroup.Arn
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource:
+                - !GetAtt PlannerFunction.Arn
+                - !GetAtt ActorFunction.Arn
+                - !GetAtt EvaluatorFunction.Arn
+
+  FameStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+
+  FameStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/stepfunctions/${FameStateMachine}"
+      RetentionInDays: 7
+
+Outputs:
+  FameStateMachineArn:
+    Description: Step Functions state machine ARN
+    Value: !Ref FameStateMachine
+  FameCacheBucketName:
+    Description: S3 bucket for Actor cache
+    Value: !Ref FameCacheBucket
+  FameMemoryTableName:
+    Description: DynamoDB table for session memory
+    Value: !Ref FameAgentMemoryTable

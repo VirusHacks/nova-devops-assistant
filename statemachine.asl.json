@@ -1,0 +1,24 @@
+{
+  "Comment": "FAME Agent - Planner -> Actor -> Evaluator",
+  "StartAt": "Planner",
+  "States": {
+    "Planner": {
+      "Type": "Task",
+      "Resource": "${PlannerArn}",
+      "Next": "Actor",
+      "Comment": "Generate step-by-step plan using Nova 2 Lite"
+    },
+    "Actor": {
+      "Type": "Task",
+      "Resource": "${ActorArn}",
+      "Next": "Evaluator",
+      "Comment": "Execute scan_terraform_code, optionally use S3 cache"
+    },
+    "Evaluator": {
+      "Type": "Task",
+      "Resource": "${EvaluatorArn}",
+      "End": true,
+      "Comment": "Narrative Variance Analysis, save to DynamoDB"
+    }
+  }
+}
