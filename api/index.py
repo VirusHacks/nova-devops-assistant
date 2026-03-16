@@ -1,4 +1,8 @@
-from github_app.webhook_server import app
+import sys
+import os
+from pathlib import Path
 
-# Vercel looks for a variable named 'app' by default in index.py
-# If you need to customize, you can do it here.
+# Add the project root to sys.path so we can import github_app
+sys.path.append(str(Path(__file__).parent.parent))
+
+from github_app.webhook_server import app
