@@ -48,12 +48,19 @@ Relevant file content (excerpt around the issue):
 {excerpt}
 ```
 
-Write a concise GitHub PR review comment (3-5 sentences max). Include:
-1. Why this is a real risk (use a concrete consequence — $, downtime, breach)
-2. The exact one-line or two-line fix in a code block
-3. Do NOT repeat the rule ID or category label
+Write a concise GitHub PR review comment. 
+CRITICAL: If the issue can be fixed by changing code, provide a GitHub Suggestion block in this exact format:
+```suggestion
+[CORRECTED CODE]
+```
+The suggestion must be valid for the {file_type} and replace the line(s) indicated.
 
-Reply only with the comment body. Use markdown. Keep it under 400 words."""
+Include:
+1. A brief explanation of the risk ($, security, or reliability).
+2. The suggestion block.
+3. Guidance on why the fix works.
+
+Reply only with the comment body. Use markdown."""
 
 
 _SUMMARY_PROMPT = """\
@@ -240,7 +247,16 @@ def scan_pull_request(
 
                 comment_body = _nova_explain_finding(nova, finding, file_type, file_path, content)
                 emoji = _format_severity_emoji(finding["severity"])
-                full_body = f"{emoji} **[{finding['id']}] {finding['severity']}** — {finding['category'].upper()}\n\n{comment_body}"
+                
+                # Check for cost/compliance metadata
+                metadata_lines = []
+                if "cost_impact" in finding:
+                    metadata_lines.append(f"💰 **Est. Cost Impact:** {finding['cost_impact']}")
+                if "compliance" in finding:
+                    metadata_lines.append(f"⚖️ **Compliance:** {finding['compliance']}")
+                
+                metadata_str = "\n".join(metadata_lines) + "\n\n" if metadata_lines else ""
+                full_body = f"{emoji} **[{finding['id']}] {finding['severity']}** — {finding['category'].upper()}\n\n{metadata_str}{comment_body}"
 
                 review_comments.append({
                     "path": file_path,

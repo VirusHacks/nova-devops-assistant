@@ -93,6 +93,28 @@ def scan_file(file_path: str, content: str) -> dict[str, Any] | None:
 
     rule_fn = _RULE_MAP[file_type]
     findings: list[Finding] = rule_fn(content)
+    
+    # Enrich findings with metadata (Phase 2)
+    enriched_findings = []
+    for f in findings:
+        fd = asdict(f)
+        
+        # Simple Cost Prediction for Terraform
+        if file_type == "terraform":
+            if "instance_type" in content:
+                # Mock logic: detect large instances
+                if any(x in content for x in ["p3", "g4", "r5", "16xlarge"]):
+                    fd["cost_impact"] = "$$$ (High) — High-performance instance detected"
+                else:
+                    fd["cost_impact"] = "$ (Low) — Standard instance"
+        
+        # Simple Compliance Mapping
+        if "security" in fd["category"].lower():
+            fd["compliance"] = "CIS AWS Benchmarks 1.2, SOC2 CC6.1"
+        elif "cost" in fd["category"].lower():
+            fd["compliance"] = "FinOps Foundation Best Practices"
+            
+        enriched_findings.append(fd)
 
     score = _calculate_score(findings)
     grade = _score_to_grade(score)
@@ -102,7 +124,7 @@ def scan_file(file_path: str, content: str) -> dict[str, Any] | None:
         "type": file_type,
         "score": score,
         "grade": grade,
-        "findings": [asdict(f) for f in findings],
+        "findings": enriched_findings,
         "severity_counts": _severity_counts(findings),
         "supported": True,
     }

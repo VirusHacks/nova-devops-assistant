@@ -62,10 +62,16 @@ const SEVERITY_LABEL: Record<string, string> = {
 
 export default function ScanDetailPage() {
   const params = useParams();
-  const id = params.id;
+  const id = params.id as string;
   const [scan, setScan] = useState<Scan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<{role: 'user' | 'nova', text: string}[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     const fetchScan = async () => {
@@ -82,6 +88,30 @@ export default function ScanDetailPage() {
     };
     if (id) fetchScan();
   }, [id]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+
+    const userMsg = chatMessage;
+    setChatMessage("");
+    setChatHistory(prev => [...prev, { role: 'user', text: userMsg }]);
+    setChatLoading(true);
+
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: userMsg, scan_id: id })
+        });
+        const data = await res.json();
+        setChatHistory(prev => [...prev, { role: 'nova', text: data.response || "No response" }]);
+    } catch (err) {
+        setChatHistory(prev => [...prev, { role: 'nova', text: "Error connecting to Nova..." }]);
+    } finally {
+        setChatLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -112,7 +142,7 @@ export default function ScanDetailPage() {
   const fileResults = scan.results?.file_results || [];
 
   return (
-    <div className="flex-1 bg-slate-950 overflow-y-auto">
+    <div className="flex-1 bg-slate-950 overflow-y-auto relative">
       {/* Hero Header */}
       <section className="relative h-64 border-b border-slate-800 flex items-end overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent"></div>
@@ -139,7 +169,13 @@ export default function ScanDetailPage() {
                 </div>
             </div>
 
-            <div className="hidden lg:flex gap-3">
+            <div className="hidden lg:flex gap-3 items-center">
+                <button 
+                    onClick={() => setIsChatOpen(true)}
+                    className="mr-4 px-6 py-2.5 rounded-2xl bg-emerald-500 text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-emerald-400 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-pulse"
+                >
+                    <span>💬</span> ASK NOVA
+                </button>
                 {Object.entries(scan.severity_counts).map(([sev, count]) => (
                     count > 0 && (
                         <div key={sev} className={`px-4 py-2.5 rounded-2xl border ${SEVERITY_LABEL[sev]} text-center min-w-[80px]`}>
@@ -176,7 +212,7 @@ export default function ScanDetailPage() {
                         <p className="text-xs font-black text-slate-600 uppercase tracking-widest">Zero security risks detected in this asset.</p>
                     </div>
                 ) : (
-                    file.findings.map((finding, idx) => (
+                    file.findings.map((finding: any, idx) => (
                         <article key={idx} className="group p-6 rounded-3xl border border-slate-800 bg-slate-900/20 hover:border-slate-500/30 transition-all flex flex-col h-full relative overflow-hidden">
                             <div className="flex items-center justify-between mb-4">
                                 <span className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest ${SEVERITY_LABEL[finding.severity]}`}>
@@ -189,13 +225,21 @@ export default function ScanDetailPage() {
                             <p className="text-xs text-slate-400 leading-relaxed mb-6 flex-grow">{finding.suggestion}</p>
 
                             <div className="mt-auto space-y-3">
+                                {finding.cost_impact && (
+                                    <div className="p-3 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                                        <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1">Cost Prediction</p>
+                                        <p className="text-[11px] text-slate-200 font-bold">{finding.cost_impact}</p>
+                                    </div>
+                                )}
+                                {finding.compliance && (
+                                    <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                                        <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Compliance Standard</p>
+                                        <p className="text-[11px] text-slate-200 font-bold">{finding.compliance}</p>
+                                    </div>
+                                )}
                                 <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/50">
                                     <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mb-1.5">Impacted Resource</p>
                                     <code className="text-[11px] text-pink-400/80 font-mono break-all">{finding.resource || "Cluster Policy"}</code>
-                                </div>
-                                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
-                                    <p className="text-[9px] font-black text-emerald-500/60 uppercase tracking-widest mb-1">AI Recommendation</p>
-                                    <p className="text-[11px] text-slate-300 font-medium">Mitigate via infrastructure update.</p>
                                 </div>
                             </div>
                         </article>
@@ -215,6 +259,56 @@ export default function ScanDetailPage() {
             </div>
         )}
       </main>
+
+      {/* AI Assistant Sidebar Drawer */}
+      <div className={`fixed inset-y-0 right-0 w-[400px] z-[60] bg-slate-950/80 backdrop-blur-3xl border-l border-slate-800 shadow-2xl transition-transform duration-500 ease-out transform ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className="h-full flex flex-col p-8">
+                <header className="flex items-center justify-between mb-8">
+                    <div>
+                        <h3 className="text-xl font-black uppercase tracking-tight">Nova <span className="gradient-text">Assistant</span></h3>
+                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Active Scan Brain</p>
+                    </div>
+                    <button onClick={() => setIsChatOpen(false)} className="w-10 h-10 rounded-full border border-slate-800 flex items-center justify-center hover:bg-slate-900 transition-colors">✕</button>
+                </header>
+
+                <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+                    {chatHistory.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50 grayscale">
+                            <div className="text-4xl">🤖</div>
+                            <p className="text-xs font-bold uppercase tracking-widest max-w-[200px]">Ask me about a finding or a code fix</p>
+                        </div>
+                    ) : (
+                        chatHistory.map((chat, i) => (
+                            <div key={i} className={`flex ${chat.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[85%] p-4 rounded-2xl text-sm ${chat.role === 'user' ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-300 border border-slate-800'}`}>
+                                    {chat.text}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                    {chatLoading && (
+                         <div className="flex justify-start">
+                            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce"></div>
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce delay-100"></div>
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce delay-200"></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <form onSubmit={handleSendMessage} className="mt-8 relative">
+                    <input 
+                        type="text"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-xs font-medium outline-none focus:border-emerald-500/50 transition-all placeholder:text-slate-600"
+                        placeholder="Type your question..."
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                    />
+                    <button type="submit" className="absolute right-3 top-2.5 w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-black hover:scale-105 transition-transform">↑</button>
+                </form>
+            </div>
+      </div>
     </div>
   );
 }

@@ -169,6 +169,46 @@ def get_scan(scan_id: str):
     return scan
 
 
+@app.post("/chat")
+async def chat_with_nova(request: Request):
+    """Handle interactive chat sessions with Nova about a specific scan."""
+    try:
+        body = await request.json()
+        message = body.get("message")
+        scan_id = body.get("scan_id")
+        history = body.get("history", [])
+
+        if not message:
+            raise HTTPException(status_code=400, detail="Missing message")
+
+        # 1. Gather context if scan_id exists
+        context_str = ""
+        if scan_id:
+            scan = db.get_scan_by_id(scan_id)
+            if scan:
+                # Truncate results for prompt brevity
+                findings_summary = []
+                for res in scan.get("results", {}).get("file_results", []):
+                    for f in res.get("findings", []):
+                        findings_summary.append(f"{f['severity']} in {res['file']}: {f['message']}")
+                
+                context_str = f"Context: The user is looking at Scan ID {scan_id} for repo {scan['repo']}. Findings: {', '.join(findings_summary[:10])}\n\n"
+
+        # 2. Build prompt
+        from nova_client import NovaClient
+        nova = NovaClient(api_key=os.environ.get("AWS_BEARER_TOKEN_BEDROCK"))
+        
+        chat_prompt = f"{context_str}User: {message}\n\nNova: "
+        # For simplicity, we're not doing full history management here, but it can be added
+        
+        response = nova.invoke(f"You are the Nova DevOps Assistant. Be concise and technical. {chat_prompt}")
+        
+        return {"response": response}
+    except Exception as e:
+        log.exception("Chat failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
