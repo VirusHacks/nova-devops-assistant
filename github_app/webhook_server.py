@@ -25,11 +25,14 @@ from fastapi.responses import JSONResponse
 from . import db
 from .pr_scanner import scan_pull_request
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 log = logging.getLogger("infraguard.webhook")
 
 
 # ─── App lifecycle ────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,6 +53,7 @@ app.add_middleware(
 
 # ─── Signature verification ───────────────────────────────────────────────────
 
+
 def _verify_signature(body: bytes, signature_header: str | None) -> bool:
     """Verify GitHub's HMAC-SHA256 webhook signature."""
     secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
@@ -58,13 +62,12 @@ def _verify_signature(body: bytes, signature_header: str | None) -> bool:
         return True  # Allow in dev; enforce in prod
     if not signature_header or not signature_header.startswith("sha256="):
         return False
-    expected = "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
+    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature_header)
 
 
 # ─── Event handlers ───────────────────────────────────────────────────────────
+
 
 def _handle_pull_request(payload: dict) -> None:
     """Process a pull_request event in the background."""
@@ -100,10 +103,13 @@ def _handle_pull_request(payload: dict) -> None:
             dashboard_base_url=dashboard_url,
         )
     except Exception as e:
-        log.exception("PR scan failed for %s/%s #%d: %s", owner, repo_name, pr_number, e)
+        log.exception(
+            "PR scan failed for %s/%s #%d: %s", owner, repo_name, pr_number, e
+        )
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
+
 
 @app.post("/webhook/github")
 async def github_webhook(request: Request, background_tasks: BackgroundTasks):
@@ -190,19 +196,24 @@ async def chat_with_nova(request: Request):
                 findings_summary = []
                 for res in scan.get("results", {}).get("file_results", []):
                     for f in res.get("findings", []):
-                        findings_summary.append(f"{f['severity']} in {res['file']}: {f['message']}")
-                
+                        findings_summary.append(
+                            f"{f['severity']} in {res['file']}: {f['message']}"
+                        )
+
                 context_str = f"Context: The user is looking at Scan ID {scan_id} for repo {scan['repo']}. Findings: {', '.join(findings_summary[:10])}\n\n"
 
         # 2. Build prompt
         from nova_client import NovaClient
+
         nova = NovaClient(api_key=os.environ.get("AWS_BEARER_TOKEN_BEDROCK"))
-        
+
         chat_prompt = f"{context_str}User: {message}\n\nNova: "
         # For simplicity, we're not doing full history management here, but it can be added
-        
-        response = nova.invoke(f"You are the Nova DevOps Assistant. Be concise and technical. {chat_prompt}")
-        
+
+        response = nova.invoke(
+            f"You are the Nova DevOps Assistant. Be concise and technical. {chat_prompt}"
+        )
+
         return {"response": response}
     except Exception as e:
         log.exception("Chat failed: %s", e)
@@ -211,6 +222,9 @@ async def chat_with_nova(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("PORT", 8000))
     print(f"InfraGuard webhook server starting on http://127.0.0.1:{port}")
-    uvicorn.run("github_app.webhook_server:app", host="127.0.0.1", port=port, reload=True)
+    uvicorn.run(
+        "github_app.webhook_server:app", host="127.0.0.1", port=port, reload=True
+    )
