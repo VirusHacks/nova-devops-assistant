@@ -1,15 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Space_Grotesk } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-brutal",
   subsets: ["latin"],
 });
 
@@ -25,60 +20,74 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex h-screen overflow-hidden`}>
-        {/* Sidebar Nav */}
-        <aside className="w-64 border-r border-slate-800 bg-slate-950/50 flex flex-col shrink-0">
-          <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <span className="text-xl">🛡️</span>
+      <body className={`${spaceGrotesk.variable} antialiased flex h-screen overflow-hidden bg-white text-[#111]`}>
+        {/* ──── Sidebar ──── */}
+        <aside className="w-[260px] border-r-[2px] border-[#111] bg-white flex flex-col shrink-0 z-10">
+          {/* Logo */}
+          <div className="px-[24px] py-[20px] border-b-[2px] border-[#111] bg-[#FFD600] flex items-center gap-[12px]">
+            <div className="w-[36px] h-[36px] border-[2px] border-[#111] rounded-[8px] bg-white flex items-center justify-center shadow-[4px_4px_0px_#000]">
+              <span className="text-[18px]">🛡️</span>
             </div>
             <div>
-              <h1 className="text-sm font-bold tracking-tight">NOVA DEVOPS</h1>
-              <p className="text-[10px] text-emerald-500 font-mono tracking-widest">GUARDIAN V1</p>
+              <p className="text-[15px] font-bold tracking-tight uppercase leading-none">NOVA DEVOPS</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] mt-[2px] opacity-70">Guardian v1</p>
             </div>
           </div>
-          
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            <Link href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/5 rounded-lg transition-all group">
-              <span className="group-hover:scale-110 transition-transform">📊</span>
-              Dashboard
-            </Link>
-            <Link href="/" className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/5 rounded-lg transition-all group">
-              <span className="group-hover:scale-110 transition-transform">⚡</span>
-              Manual Audit
-            </Link>
-            <Link href="/install" className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/5 rounded-lg transition-all group">
-              <span className="group-hover:scale-110 transition-transform">🔗</span>
-              Integrations
-            </Link>
-            <div className="pt-4 pb-2 px-3">
-              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Resources</span>
+
+          {/* Nav */}
+          <nav className="flex-1 px-[16px] py-[16px] space-y-[4px] overflow-y-auto">
+            {[
+              { href: "/dashboard", icon: "📊", label: "Dashboard" },
+              { href: "/", icon: "⚡", label: "Manual Audit" },
+              { href: "/install", icon: "🔗", label: "Integrations" },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-[12px] px-[16px] py-[10px] rounded-[8px] text-[14px] font-semibold text-[#111] border-[2px] border-transparent hover:border-[#111] hover:bg-[#FAFAFA] hover:shadow-[4px_4px_0px_#000] transition-all"
+              >
+                <span className="text-[18px] w-[20px] text-center">{item.icon}</span>
+                {item.label}
+              </Link>
+            ))}
+
+            <div className="pt-[24px] pb-[8px] px-[16px]">
+              <span className="text-[11px] font-bold text-[#888] uppercase tracking-[0.15em]">Resources</span>
             </div>
-            <Link href="/docs" className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/5 rounded-lg transition-all group">
-              <span className="group-hover:scale-110 transition-transform">📖</span>
-              Documentation
-            </Link>
-            <Link href="/settings" className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/5 rounded-lg transition-all group">
-              <span className="group-hover:scale-110 transition-transform">⚙️</span>
-              Settings
-            </Link>
+
+            {[
+              { href: "/docs", icon: "📖", label: "Documentation" },
+              { href: "/settings", icon: "⚙️", label: "Settings" },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-[12px] px-[16px] py-[10px] rounded-[8px] text-[14px] font-semibold text-[#111] border-[2px] border-transparent hover:border-[#111] hover:bg-[#FAFAFA] hover:shadow-[4px_4px_0px_#000] transition-all"
+              >
+                <span className="text-[18px] w-[20px] text-center">{item.icon}</span>
+                {item.label}
+              </Link>
+            ))}
           </nav>
-          
-          <div className="p-4 border-t border-slate-800">
-            <div className="rounded-xl bg-slate-900/50 p-4 border border-slate-800">
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Cloud Status</p>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-xs text-slate-300">Nova API Online</span>
+
+          {/* Status */}
+          <div className="px-[16px] py-[16px] border-t-[2px] border-[#111]">
+            <div className="border-[2px] border-[#111] rounded-[8px] px-[16px] py-[10px] shadow-[4px_4px_0px_#000] bg-white flex items-center justify-between">
+              <span className="text-[12px] font-bold uppercase tracking-[0.1em]">Cloud Status</span>
+              <div className="flex items-center gap-[6px]">
+                <div className="w-[10px] h-[10px] border-[2px] border-[#111] rounded-full bg-[#2ECC71]"></div>
+                <span className="text-[12px] font-bold">Online</span>
               </div>
             </div>
           </div>
         </aside>
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-950">
+        {/* ──── Main ──── */}
+        <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAFA]">
           <main className="flex-1 overflow-y-auto">
-            {children}
+            <div className="content-container">
+              {children}
+            </div>
           </main>
         </div>
       </body>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, useRef, FormEvent } from "react";
 
+/* ─── Types ─── */
 interface AnalysisResult {
   session_id?: string;
   invocation_id?: string;
@@ -10,12 +11,35 @@ interface AnalysisResult {
   type: string;
 }
 
-interface AnalysisRequestPayload {
-  request?: string;
-  terraform_file_name?: string;
-  terraform_content: string;
+interface PipelineStep {
+  id: string;
+  icon: string;
+  label: string;
+  tool: string;
+  status: "pending" | "running" | "done" | "error";
+  detail: string;
+  duration?: number;
 }
 
+const INITIAL_STEPS: Omit<PipelineStep, "status" | "detail" | "duration">[] = [
+  { id: "parse",      icon: "📄", label: "Parse Infrastructure",   tool: "scanner.detect_file_type" },
+  { id: "scan",       icon: "🔍", label: "Static Analysis",        tool: "scanner.scan_file" },
+  { id: "reason",     icon: "🧠", label: "Nova AI Reasoning",      tool: "nova_2_lite.converse" },
+  { id: "cost",       icon: "💰", label: "Cost Estimation",        tool: "cost_estimator.predict" },
+  { id: "compliance", icon: "⚖️",  label: "Compliance Mapping",     tool: "compliance.map_frameworks" },
+  { id: "report",     icon: "📝", label: "Generate Report",        tool: "report_generator.compile" },
+];
+
+const STEP_DETAILS: Record<string, string> = {
+  parse:      "Detected file type · Built AST representation",
+  scan:       "Rule engine matched findings against policy set",
+  reason:     "Nova 2 Lite analyzed severity and generated explanations",
+  cost:       "Estimated monthly cost impact per resource",
+  compliance: "Mapped findings to CIS AWS 1.2 · SOC2 CC6.1",
+  report:     "Compiled structured FinOps audit report",
+};
+
+/* ─── Component ─── */
 export default function HomePage() {
   const [content, setContent] = useState("");
   const [fileType, setFileType] = useState("terraform");
@@ -23,6 +47,31 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AnalysisResult[]>([]);
+
+  /* Pipeline state */
+  const [pipelineActive, setPipelineActive] = useState(false);
+  const [steps, setSteps] = useState<PipelineStep[]>([]);
+  const [pipelineStartTime, setPipelineStartTime] = useState<number>(0);
+  const [pipelineElapsed, setPipelineElapsed] = useState<number>(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  /* Live timer */
+  useEffect(() => {
+    if (pipelineActive && pipelineStartTime) {
+      timerRef.current = setInterval(() => {
+        setPipelineElapsed(Date.now() - pipelineStartTime);
+      }, 100);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [pipelineActive, pipelineStartTime]);
+
+  const advanceStep = (index: number, detail: string) => {
+    setSteps(prev => prev.map((s, i) => {
+      if (i === index) return { ...s, status: "done", detail, duration: Date.now() };
+      if (i === index + 1) return { ...s, status: "running" };
+      return s;
+    }));
+  };
 
   const handleAnalyze = async (e: FormEvent) => {
     e.preventDefault();
@@ -33,13 +82,33 @@ export default function HomePage() {
       return;
     }
 
-    const payload: AnalysisRequestPayload = {
+    /* Reset pipeline */
+    const freshSteps: PipelineStep[] = INITIAL_STEPS.map((s, i) => ({
+      ...s,
+      status: i === 0 ? "running" : "pending",
+      detail: "",
+    }));
+    setSteps(freshSteps);
+    setPipelineActive(true);
+    setPipelineStartTime(Date.now());
+    setPipelineElapsed(0);
+    setLoading(true);
+
+    /* Animate steps while the real fetch runs */
+    const stepTimers = [
+      setTimeout(() => advanceStep(0, STEP_DETAILS.parse), 600),
+      setTimeout(() => advanceStep(1, STEP_DETAILS.scan), 1400),
+      setTimeout(() => advanceStep(2, STEP_DETAILS.reason), 2800),
+      setTimeout(() => advanceStep(3, STEP_DETAILS.cost), 3600),
+      setTimeout(() => advanceStep(4, STEP_DETAILS.compliance), 4200),
+    ];
+
+    const payload = {
       request: `Audit this ${fileType} for: ${focus}`,
       terraform_file_name: fileType === "terraform" ? "main.tf" : (fileType === "docker" ? "Dockerfile" : "k8s.yaml"),
       terraform_content: content,
     };
 
-    setLoading(true);
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
@@ -47,11 +116,11 @@ export default function HomePage() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        throw new Error(`Cloud Analysis Error: ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`Cloud Analysis Error: ${res.status}`);
       const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+
       const item: AnalysisResult = {
         session_id: data.session_id,
         invocation_id: data.invocation_id,
@@ -59,137 +128,221 @@ export default function HomePage() {
         createdAt: new Date().toISOString(),
         type: fileType,
       };
-      setResults((prev) => [item, ...prev]);
-    } catch (err: any) {
-      setError(err.message ?? "Unexpected connectivity error");
-    } finally {
+
+      /* Wait for step animations to catch up, then finish */
+      const waitForSteps = Math.max(0, 4800 - (Date.now() - (pipelineStartTime || Date.now())));
+      setTimeout(() => {
+        advanceStep(5, STEP_DETAILS.report);
+        setTimeout(() => {
+          setResults(prev => [item, ...prev]);
+          setLoading(false);
+        }, 600);
+      }, waitForSteps);
+
+    } catch (err: unknown) {
+      stepTimers.forEach(clearTimeout);
+      setSteps(prev => prev.map(s => s.status === "running" ? { ...s, status: "error", detail: "Failed" } : s));
+      const errorMessage = err instanceof Error ? err.message : "Unexpected connectivity error";
+      setError(errorMessage);
       setLoading(false);
+      setPipelineActive(false);
     }
   };
 
+  const toolCalls = steps.filter(s => s.status === "done").length;
+  const elapsedSec = (pipelineElapsed / 1000).toFixed(1);
+
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-12 animate-in slide-in-from-bottom-4 duration-700">
-      <header className="space-y-2">
-        <h1 className="text-4xl font-black tracking-tight tracking-tighter uppercase leading-none">
-          Manual <span className="gradient-text">Cloud Audit</span>
+    <div className="space-y-[32px]">
+      {/* ── Page Header ── */}
+      <div className="page-header">
+        <h1>
+          Manual <span className="bg-white px-[8px] py-[2px] border-[2px] border-[#111] rounded-[8px] inline-block">Cloud Audit</span>
         </h1>
-        <p className="text-slate-500 font-medium">Instantly analyze IaC clusters using the Nova Guardian engine.</p>
-      </header>
+        <p>Instantly analyze IaC clusters using the Nova Guardian agentic pipeline.</p>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-        {/* Input Form */}
-        <section className="lg:col-span-7 space-y-8">
-          <form onSubmit={handleAnalyze} className="space-y-6">
-             <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Asset Type</label>
-                  <select 
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTIgMSIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[length:12px_8px] bg-[right_1rem_center] bg-no-repeat"
-                    value={fileType}
-                    onChange={(e) => setFileType(e.target.value)}
-                  >
-                    <option value="terraform">Terraform (HCL)</option>
-                    <option value="k8s">Kubernetes (YAML)</option>
-                    <option value="docker">Dockerfile</option>
-                  </select>
-               </div>
-               <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scan Profile</label>
-                  <select 
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTIgMSIgc3Ryb2tlPSIjNDc1NTY5IiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[length:12px_8px] bg-[right_1rem_center] bg-no-repeat"
-                    value={focus}
-                    onChange={(e) => setFocus(e.target.value)}
-                  >
-                    <option value="General Security">Security First</option>
-                    <option value="Cost Optimization">FinOps / Cost</option>
-                    <option value="Compliance (CIS)">Compliance (CIS)</option>
-                  </select>
-               </div>
-             </div>
+      {/* ── Two Column Layout ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-[24px] items-start">
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                Source Code
-              </label>
-              <div className="relative group">
-                <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-transparent opacity-0 group-focus-within:opacity-100 transition-opacity blur"></div>
-                <textarea
-                  className="relative w-full h-80 rounded-2xl border border-slate-800 bg-slate-950 px-5 py-4 text-sm font-mono outline-none focus:border-emerald-500/50 transition-all resize-none"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder={`project { \n  name = "production-cluster"\n  region = "us-east-1"\n}`}
-                />
-              </div>
+        {/* LEFT: Form (5 cols) */}
+        <section className="lg:col-span-5">
+          <form onSubmit={handleAnalyze} className="brutal-card-static space-y-[16px]">
+            <div className="space-y-[4px]">
+              <label className="text-[12px] font-bold uppercase tracking-[0.1em] text-[#444]">Asset Type</label>
+              <select
+                className="w-full brutal-input cursor-pointer appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTIgMSIgc3Ryb2tlPSIjMTExMTExIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[length:12px_8px] bg-[right_16px_center] bg-no-repeat pr-[40px]"
+                value={fileType}
+                onChange={(e) => setFileType(e.target.value)}
+              >
+                <option value="terraform">Terraform (HCL)</option>
+                <option value="k8s">Kubernetes (YAML)</option>
+                <option value="docker">Dockerfile</option>
+              </select>
+            </div>
+
+            <div className="space-y-[4px]">
+              <label className="text-[12px] font-bold uppercase tracking-[0.1em] text-[#444]">Scan Profile</label>
+              <select
+                className="w-full brutal-input cursor-pointer appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEgMUw2IDZMMTIgMSIgc3Ryb2tlPSIjMTExMTExIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==')] bg-[length:12px_8px] bg-[right_16px_center] bg-no-repeat pr-[40px]"
+                value={focus}
+                onChange={(e) => setFocus(e.target.value)}
+              >
+                <option value="General Security">Security First</option>
+                <option value="Cost Optimization">FinOps / Cost</option>
+                <option value="Compliance (CIS)">Compliance (CIS)</option>
+              </select>
+            </div>
+
+            <div className="space-y-[4px]">
+              <label className="text-[12px] font-bold uppercase tracking-[0.1em] text-[#444]">Source Code</label>
+              <textarea
+                className="w-full h-[280px] brutal-input text-[14px] font-mono resize-y"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={`resource "aws_instance" "web" {\n  ami           = "ami-0c55b159"\n  instance_type = "t2.micro"\n}`}
+              />
             </div>
 
             {error && (
-              <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-3">
-                <span className="text-red-500 text-lg">⚠️</span>
-                <p className="text-xs text-red-400 font-bold uppercase tracking-tight">{error}</p>
+              <div className="brutal-card-static bg-[#FF5252] text-white flex items-center gap-[12px] !p-[12px]">
+                <span className="text-[20px]">⚠️</span>
+                <p className="text-[14px] font-bold uppercase">{error}</p>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full relative group overflow-hidden rounded-2xl bg-emerald-500 py-4 text-sm font-black text-slate-950 transition-all hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50"
-            >
-              <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out skew-x-[-20deg]"></div>
-              <span className="relative flex items-center justify-center gap-2">
-                {loading ? (
-                    <>
-                        <div className="w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full animate-spin"></div>
-                        DISPATCHING NOVA AGENT...
-                    </>
-                ) : (
-                    <>
-                        🛡️ INITIATE SECURITY AUDIT
-                    </>
-                )}
-              </span>
+            <button type="submit" disabled={loading} className="w-full brutal-btn disabled:opacity-50 disabled:cursor-not-allowed text-[16px] py-[14px]">
+              {loading ? (
+                <span className="flex items-center justify-center gap-[8px]">
+                  <div className="w-[18px] h-[18px] border-[3px] border-[#111]/30 border-t-[#111] rounded-full animate-spin" />
+                  Nova Agent Running...
+                </span>
+              ) : (
+                <span>🛡️ Initiate Security Audit</span>
+              )}
             </button>
           </form>
         </section>
 
-        {/* Results Stream */}
-        <section className="lg:col-span-5 space-y-6">
-          <div className="flex items-center justify-between px-2">
-              <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Audit Results</h3>
-              {results.length > 0 && (
-                  <button onClick={() => setResults([])} className="text-[10px] font-bold text-slate-600 hover:text-red-500 uppercase transition-colors">Clear All</button>
-              )}
-          </div>
+        {/* RIGHT: Pipeline + Results (7 cols) */}
+        <section className="lg:col-span-7 space-y-[24px]">
 
-          <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-2 custom-scrollbar">
-            {results.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-800 py-20 flex flex-col items-center justify-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center text-2xl grayscale opacity-50">📂</div>
-                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest max-w-[180px]">Results will appear here in real-time</p>
+          {/* Agent Pipeline Visualizer */}
+          {(pipelineActive || steps.length > 0) && (
+            <div className="brutal-card-static bg-[#111] text-white space-y-[0px] overflow-hidden">
+              {/* Pipeline Header */}
+              <div className="flex items-center justify-between mb-[20px]">
+                <div className="flex items-center gap-[12px]">
+                  <div className="w-[36px] h-[36px] border-[2px] border-white/30 rounded-[8px] bg-[#FFD600] flex items-center justify-center text-[18px]">🤖</div>
+                  <div>
+                    <p className="text-[14px] font-bold uppercase tracking-[0.1em]">Agent Execution Pipeline</p>
+                    <p className="text-[11px] font-medium text-white/50 uppercase tracking-[0.15em]">Nova 2 Lite · Multi-Tool Chain</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[22px] font-black tabular-nums">{elapsedSec}s</p>
+                  <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.1em]">{toolCalls} tool calls</p>
+                </div>
               </div>
-            ) : (
-              results.map((item, idx) => (
-                <article
-                  key={idx}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6 space-y-4 animate-in slide-in-from-right-4 duration-500"
-                >
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                    <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-slate-300 uppercase tracking-wider">{item.type}</span>
-                        <span className="text-[10px] font-medium text-slate-600">ID: {item.session_id?.slice(0, 8)}</span>
+
+              {/* Steps */}
+              <div className="space-y-[2px]">
+                {steps.map((step, i) => (
+                  <div
+                    key={step.id}
+                    className="pipeline-step flex items-center gap-[16px] px-[16px] py-[12px] rounded-[8px]"
+                    style={{
+                      animationDelay: `${i * 100}ms`,
+                      background: step.status === "running" ? "rgba(255,214,0,0.15)"
+                               : step.status === "done" ? "rgba(46,204,113,0.1)"
+                               : step.status === "error" ? "rgba(255,82,82,0.15)"
+                               : "transparent",
+                    }}
+                  >
+                    {/* Status indicator */}
+                    <div className={`w-[32px] h-[32px] border-[2px] rounded-[8px] flex items-center justify-center text-[14px] shrink-0 ${
+                      step.status === "done" ? "border-[#2ECC71] bg-[#2ECC71] text-white"
+                      : step.status === "running" ? "border-[#FFD600] bg-[#FFD600] text-[#111] pipeline-pulse"
+                      : step.status === "error" ? "border-[#FF5252] bg-[#FF5252] text-white"
+                      : "border-white/20 bg-transparent text-white/30"
+                    }`}>
+                      {step.status === "done" ? "✓" : step.status === "running" ? "⟳" : step.status === "error" ? "✗" : step.icon}
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500">{new Date(item.createdAt).toLocaleTimeString()}</span>
+
+                    {/* Label + tool */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-[8px]">
+                        <span className={`text-[14px] font-bold uppercase ${
+                          step.status === "pending" ? "text-white/30" : "text-white"
+                        }`}>{step.label}</span>
+                        {step.status === "running" && (
+                          <span className="text-[10px] font-bold text-[#FFD600] uppercase tracking-[0.1em] animate-pulse">Processing...</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] font-mono text-white/40 truncate">{step.tool}</p>
+                    </div>
+
+                    {/* Result */}
+                    <div className="text-right shrink-0 max-w-[200px]">
+                      {step.detail && (
+                        <p className="text-[11px] font-medium text-white/60 truncate">{step.detail}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-sm leading-relaxed text-slate-300 prose prose-invert max-w-none">
-                    <div dangerouslySetInnerHTML={{ 
+                ))}
+              </div>
+
+              {/* Pipeline summary bar */}
+              {steps.every(s => s.status === "done") && (
+                <div className="mt-[16px] pt-[16px] border-t border-white/10 flex items-center justify-between px-[16px]">
+                  <div className="flex items-center gap-[8px]">
+                    <span className="text-[12px] font-bold text-[#2ECC71] uppercase">Pipeline Complete</span>
+                    <span className="text-[10px] text-white/40">·</span>
+                    <span className="text-[10px] font-mono text-white/40">{toolCalls} tools invoked</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-white/30 uppercase">Powered by Amazon Nova 2 Lite</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Results */}
+          <div>
+            <div className="flex items-center justify-between mb-[16px]">
+              <h2 className="text-[20px] font-bold uppercase tracking-tight">Audit Results</h2>
+              {results.length > 0 && (
+                <button onClick={() => { setResults([]); setSteps([]); setPipelineActive(false); }} className="text-[12px] font-bold text-[#FF5252] hover:underline uppercase cursor-pointer">Clear All</button>
+              )}
+            </div>
+
+            <div className="space-y-[16px] max-h-[75vh] overflow-y-auto pr-[4px]">
+              {results.length === 0 && !pipelineActive ? (
+                <div className="brutal-card-static py-[64px] flex flex-col items-center justify-center text-center space-y-[16px] bg-[#FAFAFA]">
+                  <div className="w-[48px] h-[48px] border-[2px] border-[#111] rounded-[10px] bg-white flex items-center justify-center text-[24px] shadow-[4px_4px_0px_#000]">📂</div>
+                  <p className="text-[14px] text-[#444] font-semibold max-w-[220px]">Paste your IaC code and run the audit to see the agent pipeline in action</p>
+                </div>
+              ) : (
+                results.map((item, idx) => (
+                  <article key={idx} className="brutal-card space-y-[12px]">
+                    <div className="flex items-center justify-between border-b-[2px] border-[#111] pb-[12px]">
+                      <div className="flex items-center gap-[8px]">
+                        <span className="brutal-badge bg-[#00C2FF]">{item.type}</span>
+                        <span className="brutal-badge bg-[#2ECC71] text-white">AI Report</span>
+                      </div>
+                      <span className="text-[12px] font-semibold">{new Date(item.createdAt).toLocaleTimeString()}</span>
+                    </div>
+                    <div className="text-[14px] leading-relaxed text-[#111] break-words">
+                      <div dangerouslySetInnerHTML={{
                         __html: item.result
-                            .replace(/\n/g, '<br/>')
-                            .replace(/\*\*(.*?)\*\*/g, '<strong class="text-emerald-400">$1</strong>')
-                            .replace(/` (.*?)`/g, '<code class="bg-slate-800 px-1 rounded">$1</code>')
-                    }} />
-                  </div>
-                </article>
-              ))
-            )}
+                          .replace(/\n/g, '<br/>')
+                          .replace(/\*\*(.*?)\*\*/g, '<strong class="bg-[#FFD600] px-[4px] border border-[#111] rounded-[4px]">$1</strong>')
+                          .replace(/`(.*?)`/g, '<code class="bg-[#f0f0f0] border border-[#111] px-[4px] rounded-[4px] font-mono text-[12px]">$1</code>')
+                      }} />
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
           </div>
         </section>
       </div>

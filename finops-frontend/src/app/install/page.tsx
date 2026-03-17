@@ -4,87 +4,142 @@ import { useState } from "react";
 import Link from "next/link";
 
 export default function InstallPage() {
-  const [installed, setInstalled] = useState(false);
+  const [installed] = useState(false);
 
-  const APP_NAME = process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "nova-devops-automate";
+  const APP_NAME =
+    process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "nova-devops-automate";
   const installUrl = `https://github.com/apps/${APP_NAME}/installations/new`;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-12 animate-in fade-in duration-700">
-      <header className="space-y-2">
-        <h1 className="text-4xl font-black tracking-tight tracking-tighter uppercase leading-none">
-          GitHub <span className="gradient-text">Integration</span>
+    <div className="space-y-[32px]">
+      {/* ── Header ── */}
+      <div className="page-header">
+        <h1>
+          GitHub{" "}
+          <span className="bg-white px-[8px] py-[2px] border-[2px] border-[#111] rounded-[8px] inline-block">
+            Integration
+          </span>
         </h1>
-        <p className="text-slate-500 font-medium">Protect your production repositories with the Nova Guardian.</p>
-      </header>
+        <p>Protect your production repositories with the Nova Guardian.</p>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-        {/* Left Side: Steps */}
-        <section className="space-y-8">
-           <div className="space-y-6">
-                {[
-                    { step: "01", title: "App Installation", desc: "Instantiate the Nova Devops Automate app on your GitHub account or organization." },
-                    { step: "02", title: "Repository Access", desc: "Select the specific repositories containing your Terraform, K8s, or Docker source code." },
-                    { step: "03", title: "Automated Checks", desc: "Nova will automatically review every Pull Request and provide line-by-line feedback." }
-                ].map((s) => (
-                    <div key={s.step} className="relative pl-12">
-                        <div className="absolute left-0 top-0 w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[10px] font-black text-emerald-500 tracking-tighter">
-                            {s.step}
-                        </div>
-                        <h3 className="font-bold text-slate-100">{s.title}</h3>
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">{s.desc}</p>
-                    </div>
-                ))}
-           </div>
+      {/* ── Two Column ── */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-[24px]">
+        {/* LEFT (5 cols) */}
+        <div className="md:col-span-5 space-y-[24px]">
+          <div className="brutal-card-static space-y-[24px]">
+            <h2 className="text-[20px] font-bold uppercase border-b-[2px] border-[#111] pb-4 mb-[16px]">
+              Installation Flow
+            </h2>
+            {[
+              {
+                step: "01",
+                title: "App Installation",
+                desc: "Instantiate the Nova Devops Automate app on your GitHub account or organization.",
+              },
+              {
+                step: "02",
+                title: "Repository Access",
+                desc: "Select the specific repositories containing your Terraform, K8s, or Docker source code.",
+              },
+              {
+                step: "03",
+                title: "Automated Checks",
+                desc: "Nova will automatically review every Pull Request and provide line-by-line feedback.",
+              },
+            ].map((s) => (
+              <div key={s.step} className="flex gap-[16px] pt-4">
+                <div className="w-[36px] h-[36px] shrink-0 bg-[#FFD600] border-[2px] border-[#111] rounded-[8px] shadow-[4px_4px_0px_#000] flex items-center justify-center text-[12px] font-black">
+                  {s.step}
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-bold uppercase">{s.title}</h3>
+                  <p className="text-[14px] text-[#444] font-medium mt-[4px] leading-relaxed">
+                    {s.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
 
-           <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/30 space-y-4">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Capabilities</p>
-                <div className="grid grid-cols-2 gap-3">
-                    {["Terraform HCL", "Dockerfiles", "K8s YAML", "Cloud Scores", "Auto-Fixes"].map(cap => (
-                        <div key={cap} className="flex items-center gap-2 text-[10px] font-bold text-slate-300">
-                            <span className="text-emerald-500">✔</span>
-                            {cap}
-                        </div>
-                    ))}
+          <div className="brutal-card-static bg-[#00C2FF]">
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] mb-[12px]">
+              Capabilities
+            </p>
+            <div className="grid grid-cols-2 gap-[8px]">
+              {[
+                "Terraform HCL",
+                "Dockerfiles",
+                "K8s YAML",
+                "Cloud Scores",
+                "Auto-Fixes",
+              ].map((cap) => (
+                <div
+                  key={cap}
+                  className="flex items-center gap-[8px] text-[13px] font-bold uppercase"
+                >
+                  <span className="w-[20px] h-[20px] border-[2px] border-[#111] rounded-[4px] bg-[#FFD600] flex items-center justify-center text-[10px] shadow-[2px_2px_0px_#000]">
+                    ✔
+                  </span>
+                  {cap}
                 </div>
-           </div>
-        </section>
+              ))}
+            </div>
+          </div>
+        </div>
 
-        {/* Right Side: CTA */}
-        <section className="flex flex-col justify-center gap-6">
-            {!installed ? (
-                <div className="rounded-3xl border border-slate-800 bg-slate-950 p-8 space-y-6 text-center relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 grayscale opacity-10 group-hover:grayscale-0 group-hover:opacity-100 transition-all text-4xl">🐙</div>
-                    <div className="space-y-2">
-                        <h2 className="text-xl font-bold">Connect your GitHub</h2>
-                        <p className="text-xs text-slate-500">Zero configuration required. Nova works out of the box with default security policies.</p>
-                    </div>
-                    
-                    <a
-                        href={installUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block w-full rounded-2xl bg-emerald-500 py-5 text-sm font-black text-slate-950 hover:bg-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-95"
-                    >
-                        INSTALL NOVA GUARDIAN
-                    </a>
-                    
-                    <p className="text-[10px] text-slate-600 font-medium">Free for Public & Private Repositories</p>
-                </div>
-            ) : (
-                <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center space-y-4 animate-in zoom-in-95 duration-500">
-                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto text-3xl">🛡️</div>
-                    <div className="space-y-2">
-                        <h2 className="text-xl font-bold text-emerald-400">Connection Active</h2>
-                        <p className="text-xs text-slate-400 max-w-[240px] mx-auto">Nova is now protecting your repositories. Open a PR to see the AI in action.</p>
-                    </div>
-                </div>
-            )}
-            
-            <Link href="/dashboard" className="text-center text-xs font-bold text-slate-600 hover:text-slate-300 uppercase tracking-widest transition-colors">
-                Return to Command Center →
-            </Link>
-        </section>
+        {/* RIGHT (7 cols) */}
+        <div className="md:col-span-7 space-y-[24px]">
+          {!installed ? (
+            <div className="brutal-card-static bg-[#FFD600] text-center relative overflow-hidden">
+              <div className="absolute top-[16px] right-[16px] opacity-20 text-[48px] pointer-events-none">
+                🐙
+              </div>
+              <div className="py-[16px] space-y-[16px]">
+                <h2 className="text-[28px] font-bold uppercase">
+                  Connect your GitHub
+                </h2>
+                <p className="text-[16px] font-medium max-w-[360px] mx-auto">
+                  Zero configuration required. Nova works out of the box with
+                  default security policies.
+                </p>
+
+                <a
+                  href={installUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="brutal-btn-ghost w-full text-[16px] py-[16px] justify-center"
+                >
+                  Install Nova Guardian
+                </a>
+
+                <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-[#111] opacity-60 mt-[8px]">
+                  Free for Public &amp; Private Repositories
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="brutal-card-static bg-[#2ECC71] text-center space-y-[16px] py-[48px]">
+              <div className="w-[56px] h-[56px] border-[2px] border-[#111] rounded-[10px] bg-white flex items-center justify-center mx-auto text-[28px] shadow-[4px_4px_0px_#000]">
+                🛡️
+              </div>
+              <h2 className="text-[24px] font-bold uppercase">
+                Connection Active
+              </h2>
+              <p className="text-[16px] font-medium max-w-[300px] mx-auto">
+                Nova is now protecting your repositories. Open a PR to see the
+                AI in action.
+              </p>
+            </div>
+          )}
+
+          <Link
+            href="/dashboard"
+            className="brutal-btn-ghost w-full justify-center text-[14px]"
+          >
+            Return to Command Center →
+          </Link>
+        </div>
       </div>
     </div>
   );

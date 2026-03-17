@@ -24,27 +24,19 @@ interface Scan {
   created_at: string;
 }
 
-const GRADE_COLOR: Record<string, string> = {
-  A: "text-emerald-400 border-emerald-500/30 bg-emerald-500/5",
-  B: "text-green-400 border-green-500/30 bg-green-500/5",
-  C: "text-yellow-400 border-yellow-500/30 bg-yellow-500/5",
-  D: "text-orange-400 border-orange-500/30 bg-orange-500/5",
-  F: "text-red-400 border-red-500/30 bg-red-500/5",
+const GRADE_BG: Record<string, string> = {
+  A: "bg-[#2ECC71]", B: "bg-[#2ECC71]", C: "bg-[#FFD600]", D: "bg-[#FF5252]", F: "bg-[#FF5252]",
 };
 
-const SEVERITY_DOT: Record<string, string> = {
-  CRITICAL: "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]",
-  HIGH: "bg-orange-500",
-  MEDIUM: "bg-yellow-500",
-  LOW: "bg-blue-500",
+const SEV_BG: Record<string, string> = {
+  CRITICAL: "bg-[#FF5252] text-white", HIGH: "bg-[#FFD600]", MEDIUM: "bg-[#00C2FF]", LOW: "bg-[#f0f0f0]",
 };
 
 function ScoreBadge({ score, grade }: { score: number; grade: string }) {
-  const style = GRADE_COLOR[grade] || "text-slate-400 border-slate-800 bg-slate-900";
   return (
-    <div className={`px-4 py-2 rounded-xl border ${style} flex flex-col items-center justify-center min-w-[64px]`}>
-      <span className="text-xl font-black">{grade}</span>
-      <span className="text-[10px] opacity-60 font-bold uppercase">{score}</span>
+    <div className={`w-[56px] h-[56px] border-[2px] border-[#111] rounded-[10px] shadow-[4px_4px_0px_#000] flex flex-col items-center justify-center ${GRADE_BG[grade] || "bg-white"}`}>
+      <span className="text-[22px] font-black leading-none">{grade}</span>
+      <span className="text-[10px] font-bold mt-[2px]">{score}</span>
     </div>
   );
 }
@@ -56,58 +48,43 @@ function ScanCard({ scan }: { scan: Scan }) {
   });
 
   return (
-    <Link href={`/scans/${scan.id}`}>
-      <article className="group rounded-2xl border border-slate-800 bg-slate-900/30 p-5 hover:border-emerald-500/40 hover:bg-slate-900/50 transition-all cursor-pointer space-y-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-emerald-500 text-xs">View Details →</span>
-        </div>
-        
+    <Link href={`/scans/${scan.id}`} className="block group">
+      <article className="brutal-card h-full flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <p className="font-bold text-slate-100 tracking-tight">{scan.repo}</p>
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+        <div className="flex items-start justify-between gap-[16px] mb-[16px]">
+          <div className="space-y-[8px] min-w-0">
+            <p className="font-bold text-[18px] text-[#111] truncate">{scan.repo}</p>
+            <div className="flex items-center gap-[8px] text-[12px] font-semibold text-[#444]">
+              <span className="brutal-badge bg-[#f0f0f0]">
                 {scan.pr_number ? `PR #${scan.pr_number}` : "PUSH"}
               </span>
-              <span>•</span>
               <span>{when}</span>
             </div>
           </div>
           <ScoreBadge score={scan.overall_score} grade={scan.overall_grade} />
         </div>
 
-        {/* Severity pills */}
-        <div className="flex flex-wrap gap-2 pt-2">
+        {/* Severity */}
+        <div className="flex flex-wrap gap-[8px] mb-[16px]">
           {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((sev) =>
             (counts[sev] || 0) > 0 ? (
-              <span
-                key={sev}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-950 px-2.5 py-1 text-[10px] font-bold text-slate-300"
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${SEVERITY_DOT[sev]}`} />
+              <span key={sev} className={`brutal-badge ${SEV_BG[sev]}`}>
                 {counts[sev]} {sev}
               </span>
             ) : null
           )}
           {scan.total_findings === 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-1 text-[10px] font-bold text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              CLEAN
-            </span>
+            <span className="brutal-badge bg-[#2ECC71]">CLEAN</span>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-800/50">
-          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-            {scan.files_scanned} FILE(S) SCANNED
-          </p>
-          <div className="h-1.5 w-24 bg-slate-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-emerald-500 rounded-full transition-all duration-1000" 
-              style={{ width: `${scan.overall_score}%` }}
-            />
+        <div className="mt-auto pt-[16px] border-t-[2px] border-[#111] flex items-center justify-between">
+          <span className="text-[12px] font-bold uppercase tracking-[0.1em]">
+            {scan.files_scanned} file(s) scanned
+          </span>
+          <div className="h-[8px] w-[100px] border-[2px] border-[#111] rounded-[4px] bg-white overflow-hidden">
+            <div className="h-full bg-[#111] transition-all duration-1000" style={{ width: `${scan.overall_score}%` }} />
           </div>
         </div>
       </article>
@@ -129,115 +106,98 @@ export default function DashboardPage() {
         if (!res.ok) throw new Error("Failed to connect to scanner API");
         const data = await res.json();
         setScans(data.scans || []);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e: unknown) {
+        if (e instanceof Error) {
+          setError(e.message);
+        } else {
+          setError("An unknown error occurred");
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchScans();
-    const iv = setInterval(fetchScans, 15_000); // Faster refresh for "real-time" feel
+    const iv = setInterval(fetchScans, 15_000);
     return () => clearInterval(iv);
   }, [repoFilter]);
 
-  // Stats
-  const avgScore = scans.length
-    ? Math.round(scans.reduce((a, s) => a + s.overall_score, 0) / scans.length)
-    : 0;
+  const avgScore = scans.length ? Math.round(scans.reduce((a, s) => a + s.overall_score, 0) / scans.length) : 0;
   const totalFindings = scans.reduce((a, s) => a + s.total_findings, 0);
   const repos = new Set(scans.map((s) => s.repo)).size;
 
   return (
-    <div className="p-8 space-y-8 animate-in fade-in duration-700">
-      {/* Page Header */}
-      <div className="flex items-end justify-between">
+    <div className="space-y-[32px]">
+      {/* ── Page Header ── */}
+      <div className="page-header flex flex-col md:flex-row items-start md:items-center justify-between gap-[16px]">
         <div>
-          <h2 className="text-3xl font-black tracking-tight uppercase">Operational <span className="gradient-text">Overview</span></h2>
-          <p className="text-slate-500 font-medium">Monitoring {repos} active repositories for compliance and cost.</p>
+          <h1>
+            Operational <span className="bg-white px-[8px] py-[2px] border-[2px] border-[#111] rounded-[8px] inline-block">Overview</span>
+          </h1>
+          <p>Monitoring {repos} active repositories for compliance and cost.</p>
         </div>
-        <div className="flex gap-3">
-           <input
-            className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 w-64 transition-all"
-            placeholder="Filter by repository..."
-            value={repoFilter}
-            onChange={(e) => setRepoFilter(e.target.value)}
-          />
-        </div>
+        <input
+          className="brutal-input w-full md:w-[280px] bg-white"
+          placeholder="Filter by repository..."
+          value={repoFilter}
+          onChange={(e) => setRepoFilter(e.target.value)}
+        />
       </div>
 
-      {/* Hero Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* ── Stat Cards (3-col) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-[24px]">
         {[
-          { label: "Active Nodes", value: repos, sub: "Healthy Connections", icon: "🌐" },
-          { label: "Average Grade", value: avgScore, sub: "Global Score Baseline", icon: "📈", unit: "/100" },
-          {
-            label: "Risk Alerts",
-            value: totalFindings,
-            sub: "Total Findings Found",
-            icon: "🚨",
-            critical: totalFindings > 20
-          },
+          { label: "Active Nodes", value: repos, sub: "Healthy Connections", icon: "🌐", bg: "bg-[#00C2FF]" },
+          { label: "Average Grade", value: avgScore, sub: "Global Score Baseline", icon: "📈", unit: "/100", bg: "bg-[#FFD600]" },
+          { label: "Risk Alerts", value: totalFindings, sub: "Total Findings Found", icon: "🚨", bg: totalFindings > 20 ? "bg-[#FF5252]" : "bg-[#FFF3F3]" },
         ].map((stat) => (
-          <div
-            key={stat.label}
-            className={`relative rounded-3xl border p-6 overflow-hidden ${
-              stat.critical ? "border-red-500/20 bg-red-500/5" : "border-slate-800 bg-slate-900/40"
-            }`}
-          >
-            <div className="absolute top-4 right-4 text-3xl opacity-20">{stat.icon}</div>
-            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</p>
-            <div className="flex items-baseline gap-1 mt-1">
-              <p className="text-4xl font-black text-slate-100">{stat.value}</p>
-              {stat.unit && <span className="text-lg font-bold text-slate-600">{stat.unit}</span>}
+          <div key={stat.label} className={`border-[2px] border-[#111] rounded-[10px] shadow-[6px_6px_0px_#000] p-[24px] relative overflow-hidden ${stat.bg}`}>
+            <div className="absolute top-[16px] right-[16px] text-[32px] opacity-30">{stat.icon}</div>
+            <p className="text-[12px] font-bold uppercase tracking-[0.15em] mb-[8px]">{stat.label}</p>
+            <div className="flex items-baseline gap-[4px]">
+              <span className="text-[48px] font-black leading-none">{stat.value}</span>
+              {stat.unit && <span className="text-[18px] font-bold opacity-70">{stat.unit}</span>}
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-1">{stat.sub}</p>
+            <p className="text-[14px] font-medium mt-[8px] opacity-60">{stat.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Main List */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between px-2">
-            <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Latest Security Audits</h3>
-            <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Live Feed</span>
-            </div>
+      {/* ── Audit List ── */}
+      <section className="space-y-[24px]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[28px] font-bold uppercase tracking-tight">Latest Security Audits</h2>
+          <div className="flex items-center gap-[8px]">
+            <div className="w-[10px] h-[10px] border-[2px] border-[#111] rounded-full bg-[#2ECC71]" />
+            <span className="text-[12px] font-bold uppercase tracking-[0.1em]">Live Feed</span>
+          </div>
         </div>
 
         {loading ? (
-            <div className="grid gap-4 md:grid-cols-2">
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="h-40 rounded-2xl border border-slate-900 bg-slate-900/20 animate-pulse"></div>
-                ))}
-            </div>
+          <div className="grid gap-[24px] md:grid-cols-2">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-[200px] brutal-card-static bg-[#f0f0f0] animate-pulse" />
+            ))}
+          </div>
         ) : scans.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-800 py-24 flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-20 h-20 rounded-full bg-slate-900 flex items-center justify-center text-4xl">🏗️</div>
-            <div className="space-y-2">
-                <h3 className="text-xl font-bold">No data streams detected</h3>
-                <p className="text-slate-500 max-w-xs mx-auto text-sm">Deploy the Nova Guardian to your GitHub repositories to begin real-time infrastructure auditing.</p>
-            </div>
-            <Link
-              href="/install"
-              className="rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-black text-slate-950 hover:bg-emerald-400 transition-colors"
-            >
-              DEPLOY GUARDIAN
-            </Link>
+          <div className="brutal-card-static py-[64px] flex flex-col items-center justify-center text-center space-y-[16px]">
+            <div className="w-[64px] h-[64px] border-[2px] border-[#111] rounded-[10px] bg-[#FFD600] flex items-center justify-center text-[32px] shadow-[4px_4px_0px_#000]">🏗️</div>
+            <h3 className="text-[20px] font-bold uppercase">No data streams detected</h3>
+            <p className="text-[16px] text-[#444] font-medium max-w-[400px]">Deploy the Nova Guardian to your GitHub repositories to begin real-time infrastructure auditing.</p>
+            <Link href="/install" className="brutal-btn mt-[8px]">Deploy Guardian</Link>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-[24px] md:grid-cols-2">
             {scans.map((scan) => (
               <ScanCard key={scan.id} scan={scan} />
             ))}
           </div>
         )}
       </section>
-      
+
       {error && (
-        <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-3">
-            <span className="text-red-500 text-xl">⚠️</span>
-            <p className="text-sm text-red-400 font-medium">Connectivity Issue: {error}</p>
+        <div className="brutal-card-static bg-[#FF5252] text-white flex items-center gap-[16px]">
+          <span className="text-[24px]">⚠️</span>
+          <p className="text-[16px] font-bold uppercase flex-1">Connectivity Issue: {error}</p>
         </div>
       )}
     </div>
